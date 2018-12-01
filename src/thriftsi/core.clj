@@ -1,14 +1,6 @@
 (ns thriftsi.core
   (:require [clojure.test :refer :all]))
 
-
-(comment
-  {:loans #{{:from :a
-             :to :b
-             :amount 10}}
-   :deposits {:b 1
-             :a 0}})
-
 (defn add [base amount]
   ((fnil + 0) base amount))
 
@@ -46,7 +38,7 @@
          (spend {:deposits {:a 10}}
                 :a :b 5))))
 
-(defn extend-bank-credit [state creditor deptor amount]
+(defn take-bank-loan [state creditor deptor amount]
   (-> state
       (update-loan add creditor deptor amount)
       (update-deposit add deptor amount)))
@@ -54,7 +46,7 @@
 (deftest test-extend-bank-credit
   (is (= {:loans {[:bank :a] 10}
           :deposits {:a 10}}
-         (extend-bank-credit {}
+         (take-bank-loan {}
                              :bank
                              :a
                              10))))
@@ -64,7 +56,7 @@
   (assert-balance!  state creditor amount)
 
   (-> state
-      (extend-bank-credit creditor deptor amount)
+      (take-bank-loan creditor deptor amount)
       (update-deposit substract creditor amount)))
 
 (deftest test-hard-lend
@@ -100,7 +92,7 @@
 
 (deftest test-simulate
   (testing "spending chain"
-    (is (= '([extend-bank-credit :bank :a 10]
+    (is (= '([take-bank-loan :bank :a 10]
              {:loans {[:bank :a] 10}, :deposits {:a 10}}
              [spend :a :b 10]
              {:loans {[:bank :a] 10}, :deposits {:a 0, :b 10}}
@@ -108,14 +100,14 @@
              {:loans {[:bank :a] 10}, :deposits {:a 10, :b 0}}
              [pay-bank-loan :a :bank 10]
              {:loans {}, :deposits {:a 0, :b 0}})
-           (simulate '[[extend-bank-credit :bank :a 10]
+           (simulate '[[take-bank-loan :bank :a 10]
                        [spend :a :b 10]
                        [spend :b :a 10]
                        [pay-bank-loan :a :bank 10]]))))
 
 
   (testing "loan chain"
-    (is (= '([extend-bank-credit :bank :a 10]
+    (is (= '([take-bank-loan :bank :a 10]
              {:loans {[:bank :a] 10}, :deposits {:a 10}}
              [lend :a :b 10]
              {:loans {[:bank :a] 10, [:a :b] 10}, :deposits {:a 0, :b 10}}
@@ -123,13 +115,13 @@
              {:loans {[:bank :a] 10}, :deposits {:a 10, :b 0}}
              [pay-bank-loan :a :bank 10]
              {:loans {}, :deposits {:a 0, :b 0}})
-           (simulate '[[extend-bank-credit :bank :a 10]
+           (simulate '[[take-bank-loan :bank :a 10]
                        [lend :a :b 10]
                        [pay-loan :b :a 10]
                        [pay-bank-loan :a :bank 10]]))))
 
   (testing "twice lent money, c has no way to pay the loan to b"
-    (is (= '([extend-bank-credit :bank :a 10]
+    (is (= '([take-bank-loan :bank :a 10]
              {:loans {[:bank :a] 10}, :deposits {:a 10}}
              [spend :a :b 10]
              {:loans {[:bank :a] 10}, :deposits {:a 0, :b 10}}
@@ -139,7 +131,7 @@
              {:loans {[:bank :a] 10, [:b :c] 10}, :deposits {:a 10, :b 0, :c 0}}
              [pay-bank-loan :a :bank 10]
              {:loans {[:b :c] 10}, :deposits {:a 0, :b 0, :c 0}})
-           (simulate '[[extend-bank-credit :bank :a 10]
+           (simulate '[[take-bank-loan :bank :a 10]
                        [spend :a :b 10]
                        [lend :b :c 10]
                        [spend :c :a 10]
