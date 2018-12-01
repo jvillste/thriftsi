@@ -7,7 +7,7 @@
 (defn substract [base amount]
   ((fnil - 0) base amount))
 
-(defn update-deposit [state operator party amount]
+(defn update-balance [state operator party amount]
   (update-in state
              [:deposits party]
              operator
@@ -24,14 +24,14 @@
 
 (defn assert-balance! [state party amount]
   (assert (<= amount (-> state :deposits party))
-          "Not enough deposit"))
+          "Not enough balance!"))
 
 (defn spend [state from to amount]
   (assert-balance!  state from amount)
 
   (-> state
-      (update-deposit substract from amount)
-      (update-deposit add to amount)))
+      (update-balance substract from amount)
+      (update-balance add to amount)))
 
 (deftest test-spend
   (is (= {:deposits {:a 5, :b 5}}
@@ -41,9 +41,9 @@
 (defn take-bank-loan [state creditor deptor amount]
   (-> state
       (update-loan add creditor deptor amount)
-      (update-deposit add deptor amount)))
+      (update-balance add deptor amount)))
 
-(deftest test-extend-bank-credit
+(deftest test-take-bank-loan
   (is (= {:loans {[:bank :a] 10}
           :deposits {:a 10}}
          (take-bank-loan {}
@@ -57,9 +57,9 @@
 
   (-> state
       (take-bank-loan creditor deptor amount)
-      (update-deposit substract creditor amount)))
+      (update-balance substract creditor amount)))
 
-(deftest test-hard-lend
+(deftest test-lend
   (is (= {:deposits {:a 0, :b 10}
           :loans {[:a :b] 10}}
          (lend {:deposits {:a 10}}
@@ -71,14 +71,14 @@
   (assert-balance! state deptor amount)
 
   (-> state
-      (update-deposit substract deptor amount)
+      (update-balance substract deptor amount)
       (update-loan substract creditor deptor amount)))
 
 (defn pay-loan [state deptor creditor amount]
   (-> state
       (update-loan substract creditor deptor amount)
-      (update-deposit substract deptor amount)
-      (update-deposit add creditor amount)))
+      (update-balance substract deptor amount)
+      (update-balance add creditor amount)))
 
 (defn simulate [transactions]
   (interleave transactions
