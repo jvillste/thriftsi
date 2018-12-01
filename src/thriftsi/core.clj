@@ -47,9 +47,9 @@
   (is (= {:loans {[:bank :a] 10}
           :deposits {:a 10}}
          (take-bank-loan {}
-                             :bank
-                             :a
-                             10))))
+                         :bank
+                         :a
+                         10))))
 
 
 (defn lend [state creditor deptor amount]
@@ -63,9 +63,9 @@
   (is (= {:deposits {:a 0, :b 10}
           :loans {[:a :b] 10}}
          (lend {:deposits {:a 10}}
-                    :a
-                    :b
-                    10))))
+               :a
+               :b
+               10))))
 
 (defn pay-bank-loan [state deptor creditor amount]
   (assert-balance! state deptor amount)
