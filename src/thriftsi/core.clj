@@ -80,59 +80,81 @@
       (update-balance substract deptor amount)
       (update-balance add creditor amount)))
 
-(defn simulate [transactions]
-  (interleave transactions
-              (rest (reductions (fn [state [operation & parameters]]
-                                  (apply (get (ns-publics 'thriftsi.core)
-                                              operation)
-                                         state
-                                         parameters))
-                                {}
-                                transactions))))
+(defn simulate
+  ([transactions]
+   (simulate {}
+             transactions))
+
+  ([initial-state transactions]
+   (interleave transactions
+               (rest (reductions (fn [state [operation & parameters]]
+                                   (apply (get (ns-publics 'thriftsi.core)
+                                               operation)
+                                          state
+                                          parameters))
+                                 initial-state
+                                 transactions)))))
 
 (deftest test-simulate
   (testing "spending chain"
-    (is (= '([take-bank-loan :bank :a 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 10}}
-             [spend :a :b 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 0, :b 10}}
-             [spend :b :a 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 10, :b 0}}
-             [pay-bank-loan :a :bank 10]
+    (is (= '([take-bank-loan :bank :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1}}
+             [spend :a :b 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 0, :b 1}}
+             [spend :b :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1, :b 0}}
+             [pay-bank-loan :a :bank 1]
              {:loans {}, :deposits {:a 0, :b 0}})
-           (simulate '[[take-bank-loan :bank :a 10]
-                       [spend :a :b 10]
-                       [spend :b :a 10]
-                       [pay-bank-loan :a :bank 10]]))))
-
+           (simulate '[[take-bank-loan :bank :a 1]
+                       [spend :a :b 1]
+                       [spend :b :a 1]
+                       [pay-bank-loan :a :bank 1]]))))
 
   (testing "loan chain"
-    (is (= '([take-bank-loan :bank :a 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 10}}
-             [lend :a :b 10]
-             {:loans {[:bank :a] 10, [:a :b] 10}, :deposits {:a 0, :b 10}}
-             [pay-loan :b :a 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 10, :b 0}}
-             [pay-bank-loan :a :bank 10]
+    (is (= '([take-bank-loan :bank :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1}}
+             [lend :a :b 1]
+             {:loans {[:bank :a] 1, [:a :b] 1}, :deposits {:a 0, :b 1}}
+             [pay-loan :b :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1, :b 0}}
+             [pay-bank-loan :a :bank 1]
              {:loans {}, :deposits {:a 0, :b 0}})
-           (simulate '[[take-bank-loan :bank :a 10]
-                       [lend :a :b 10]
-                       [pay-loan :b :a 10]
-                       [pay-bank-loan :a :bank 10]]))))
+           (simulate '[[take-bank-loan :bank :a 1]
+                       [lend :a :b 1]
+                       [pay-loan :b :a 1]
+                       [pay-bank-loan :a :bank 1]]))))
 
-  (testing "twice lent money, c has no way to pay the loan to b"
-    (is (= '([take-bank-loan :bank :a 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 10}}
-             [spend :a :b 10]
-             {:loans {[:bank :a] 10}, :deposits {:a 0, :b 10}}
-             [lend :b :c 10]
-             {:loans {[:bank :a] 10, [:b :c] 10}, :deposits {:a 0, :b 0, :c 10}}
-             [spend :c :a 10]
-             {:loans {[:bank :a] 10, [:b :c] 10}, :deposits {:a 10, :b 0, :c 0}}
-             [pay-bank-loan :a :bank 10]
-             {:loans {[:b :c] 10}, :deposits {:a 0, :b 0, :c 0}})
-           (simulate '[[take-bank-loan :bank :a 10]
-                       [spend :a :b 10]
-                       [lend :b :c 10]
-                       [spend :c :a 10]
-                       [pay-bank-loan :a :bank 10]])))))
+  (testing "twice lent money, c has no way to pay the loan to b because there are no deposits in the system."
+    (is (= '([take-bank-loan :bank :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1}}
+             [spend :a :b 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 0, :b 1}}
+             [lend :b :c 1]
+             {:loans {[:bank :a] 1, [:b :c] 1}, :deposits {:a 0, :b 0, :c 1}}
+             [spend :c :a 1]
+             {:loans {[:bank :a] 1, [:b :c] 1}, :deposits {:a 1, :b 0, :c 0}}
+             [pay-bank-loan :a :bank 1]
+             {:loans {[:b :c] 1}, :deposits {:a 0, :b 0, :c 0}})
+           (simulate '[[take-bank-loan :bank :a 1]
+                       [spend :a :b 1]
+                       [lend :b :c 1]
+                       [spend :c :a 1]
+                       [pay-bank-loan :a :bank 1]]))))
+
+  (testing "New bank loan can be used to resolve unpayable dept resulting from twice lent money."
+    (is (= '([take-bank-loan :bank :a 1]
+             {:loans {[:b :c] 1, [:bank :a] 1}, :deposits {:a 1, :b 0, :c 0}}
+             [spend :a :c 1]
+             {:loans {[:b :c] 1, [:bank :a] 1}, :deposits {:a 0, :b 0, :c 1}}
+             [pay-loan :c :b 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 0, :b 1, :c 0}}
+             [spend :b :a 1]
+             {:loans {[:bank :a] 1}, :deposits {:a 1, :b 0, :c 0}}
+             [pay-bank-loan :a :bank 1]
+             {:loans {}, :deposits {:a 0, :b 0, :c 0}})
+           (simulate {:loans {[:b :c] 1}, :deposits {:a 0, :b 0, :c 0}}
+                     '[[take-bank-loan :bank :a 1]
+                       [spend :a :c 1]
+                       [pay-loan :c :b 1]
+                       [spend :b :a 1]
+                       [pay-bank-loan :a :bank 1]])))))
